@@ -2,6 +2,8 @@ library(tidyverse)
 library(mgcv)
 library(patchwork)
 
+Sys.setlocale("LC_ALL", "English")
+
 # 0. Setup and data ----
 
 source("00_aux_functions.R")
@@ -170,8 +172,144 @@ ggsave(
 
 ggsave(
   g_composed, 
-  filename = "img/img01_exploratory_patterns.tiff",
+  filename = "img/img01_exploratory_patterns.jpeg",
   width = 7.5,
   units = 'in',
+  dpi = 300
+)
+
+# 3. AUC explanation ----
+
+hourly_t <- read_csv("data/hourly_temp_23.csv", show_col_types = F) %>% 
+  mutate(dt_registro = with_tz(dt_registro, "America/Sao_Paulo"))
+
+nov23_wv <- hourly_t %>% 
+  filter(dia >= '2023-11-11',
+         dia <= '2023-11-18')
+
+# expanded (interpolated)
+nov23_wv_ex <- 
+  approx(nov23_wv$dt_registro, nov23_wv$heat_index, n=100*length(unique(nov23_wv$dia))) %>% 
+  as_tibble() %>% 
+  mutate(dt_registro = seq(min(nov23_wv$dt_registro), max(nov23_wv$dt_registro), length.out = nrow(.))) 
+
+nov23_daily <- temp_df %>% 
+  filter(dia >= '2023-11-11',
+         dia <= '2023-11-18') %>% 
+  select(dia, t_med, hi_med) %>% 
+  mutate(meio_dia = ymd_hm(paste0(dia, "12:00"), tz = "America/Sao_Paulo"))
+
+nov23_auc <- temp_df %>% 
+  select(dia, auc32, auc36) %>% 
+  filter(dia >= '2023-11-11',
+         dia <= '2023-11-18') %>% 
+  mutate(meio_dia = ymd_hm(paste0(dia, "12:00"), tz = "America/Sao_Paulo"))
+
+g_auc_nov <- 
+  nov23_auc %>% 
+  ggplot(aes(x=dia, y=1)) + 
+  geom_line() + 
+  geom_point(aes(size=auc36, fill=auc36), color="black", shape=21) +
+  theme_minimal() +
+  guides(size="none", fill = guide_colorbar(title.position="top")) +
+  geom_vline(xintercept = seq(ymd("2023-11-11"), ymd("2023-11-20"), by=1) 
+             + seq(0.618, 0.325, length.out=10)
+             , alpha=0.2) +
+  scale_size_continuous(range = c(2, 16),limits = c(0,120)
+  ) +
+  scale_x_date(date_breaks = "1 day", 
+               labels = function(x) {
+                 format(x, "%b %d") %>% str_to_title()
+               }, position = "top") +
+  labs(x="Data", fill = "(a), Accumulated Heat Area (°C * h)") +
+  scale_fill_viridis_c(option = "C", 
+                       values = seq(0, 120/max(nov23_auc$auc36), length.out=6),
+                       breaks = seq(0, 120, by=30),
+                       limits = c(0,120)) +
+  theme(axis.title.y = element_blank(),
+        axis.line.y = element_blank(),
+        axis.text.y = element_blank(),
+        legend.position = "top",
+        panel.grid = element_blank(),
+        legend.key.width = unit(1,"cm"),
+        legend.key.height = unit(0.2, "cm"),
+        legend.title = element_text(hjust=0.5, size=8.6, face="bold"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size=10, face="bold"),
+        plot.margin = unit(c(0.2, 0.2, 0, 0.2), "cm"))
+
+g_ic_nov <- 
+  nov23_wv %>% 
+  ggplot(aes(x=dt_registro)) + 
+  geom_ribbon(
+    data = nov23_wv_ex %>% 
+      mutate(y_min = 36, y_max = ifelse(y >= 36, y, 36)),
+    aes(ymin = y_min, ymax=y_max),
+    fill = "orange"
+  ) +
+  geom_hline(yintercept = 36, linetype = "dashed") +
+  scale_y_continuous(breaks = seq(20, 50, by=2)
+  ) +
+  scale_x_datetime(
+    expand=c(0,0),
+    date_breaks = "6 hours",
+    labels = function(x) {
+      
+      case_when(
+        hour(x) == 0 ~ "\n",
+        TRUE ~ format(x, "\n%Hh")
+      )
+    }
+  ) +
+  geom_vline(xintercept = nov23_wv %>% filter(hour(dt_registro)==0) %>% pull(dt_registro), alpha=0.2) +
+  labs(x="Hour", y = "Heat Index (°C)") +
+  geom_line(aes(y=heat_index)) +
+  geom_line(
+    data = nov23_daily,
+    aes(x=meio_dia, y=hi_med, color = "Average daily HI")
+  ) + 
+  geom_point(data = nov23_daily,
+             aes(x=meio_dia, y=hi_med, color = "Average daily HI")) +
+  theme_minimal() + 
+  annotate("text",
+           x=ymd_hm("2023-11-15 00:00"),
+           y=50,
+           label = "(b), Hourly heat index (°C)",
+           fontface="bold",
+           size=3.2) +
+  scale_color_manual(values = c("#c70559")) +
+  theme(panel.grid.minor.y = element_blank(),
+        panel.grid = element_blank(),
+        plot.margin = unit(c(0, 0.2, 0, 0.2), "cm"),
+        axis.line.y = element_line(linewidth = 0.6, color = "black"),
+        axis.title.y = element_text(size=6, face="bold"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(vjust=12, size=6),
+        axis.text.y = element_text(size=6),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.margin = margin(t = 0, b=0, unit='cm'),
+        legend.box.margin = margin(t = 0, b=0, unit='cm'))
+
+g_nov_all <- 
+  g_auc_nov / g_ic_nov + 
+    plot_layout(heights = c(1,4)) + 
+    plot_annotation(title = "November 2023 Heat Wave (Nov 11th-18th)",
+                    theme = theme(
+                      plot.title = element_text(hjust = 0.5, face="bold", size=10)))
+
+ggsave(
+  g_nov_all,
+  filename = "img/img04_nov_heat_wave.tiff",
+  width = 7.5,
+  units = "in",
+  dpi = 300
+)
+
+ggsave(
+  g_nov_all,
+  filename = "img/img04_nov_heat_wave.jpeg",
+  width = 7.5,
+  units = "in",
   dpi = 300
 )

@@ -39,24 +39,67 @@ get_cdc_groups <- function() {
   cdc_groups
 }
 
-translate_cdc_groups <- function(label) {
-  case_when(
-    label == "Influenza e Pneumonia" ~ "Influenza and pneumonia",
-    label == "Respiratórias Crônicas Inferiores" ~ "Chronic lower respiratory diseases",
-    label == "Outras doenças respiratórias" ~ "Other diseases of the respiratory system",
-    label == "Doenças hipertensivas" ~ "Hypertensive diseases",
-    label == "IAM" ~ "Ischemic heart disease",
-    label == "Parada Cardíaca" ~ "Heart failure",
-    label == "AVC" ~ "Cerebrovascular diseases",
-    label == "Outras doenças do Aparelho Circulatório" ~ "Other disease of the circulatory system",
-    label == "Neoplasias" ~ "Malignant neoplasms",
-    label == "Alzheimer e demência" ~ "Alzheimer and dementia",
-    label == "Diabetes" ~ "Diabetes",
-    label == "Falência Renal" ~ "Renal failure",
-    label == "Sepse" ~ "Sepsis",
-    label == "Trato urinário" ~ "Urinary tract infections",
-    label == "Causas indeterminadas" ~ "Undetermined deaths",
-    label == "Causas selecionadas" ~ "Selected causes",
-    label == "Causas naturais" ~ "Natural causes"
-  )
+translate_cdc_groups <- function(label, reduced=0) {
+  
+  if (reduced==0) {
+    case_when(
+      label == "Influenza e Pneumonia" ~ "Influenza and pneumonia",
+      label == "Respiratórias Crônicas Inferiores" ~ "Chronic lower respiratory diseases",
+      label == "Outras doenças respiratórias" ~ "Other diseases of the respiratory system",
+      label == "Doenças hipertensivas" ~ "Hypertensive diseases",
+      label == "IAM" ~ "Ischemic heart disease",
+      label == "Parada Cardíaca" ~ "Heart failure",
+      label == "AVC" ~ "Cerebrovascular diseases",
+      label == "Outras doenças do Aparelho Circulatório" ~ "Other disease of the circulatory system",
+      label == "Neoplasias" ~ "Malignant neoplasms",
+      label == "Alzheimer e demência" ~ "Alzheimer and dementia",
+      label == "Diabetes" ~ "Diabetes",
+      label == "Falência Renal" ~ "Renal failure",
+      label == "Sepse" ~ "Sepsis",
+      label == "Trato urinário" ~ "Urinary tract infections",
+      label == "Causas indeterminadas" ~ "Undetermined deaths",
+      label == "Causas selecionadas" ~ "Selected causes",
+      label == "Causas naturais" ~ "Natural causes"
+    ) 
+  } else if (reduced==1) {
+    case_when(
+      label == "Influenza e Pneumonia" ~ "Flu/Pneu",
+      label == "Respiratórias Crônicas Inferiores" ~ "Chronic Resp.",
+      label == "Outras doenças respiratórias" ~ "Other Resp.",
+      label == "Doenças hipertensivas" ~ "Hypertensive diseases",
+      label == "IAM" ~ "Ischemic heart disease",
+      label == "Parada Cardíaca" ~ "Heart failure",
+      label == "AVC" ~ "CVD",
+      label == "Outras doenças do Aparelho Circulatório" ~ "Other Circ.",
+      label == "Neoplasias" ~ "Malig. Neo.",
+      label == "Alzheimer e demência" ~ "Alz/Dem",
+      label == "Diabetes" ~ "Diabetes",
+      label == "Falência Renal" ~ "Renal failure",
+      label == "Sepse" ~ "Sepsis",
+      label == "Trato urinário" ~ "Urinary tract infections",
+      label == "Causas indeterminadas" ~ "Undetermined deaths",
+      label == "Causas selecionadas" ~ "Selected causes",
+      label == "Causas naturais" ~ "Natural causes"
+    ) 
+  } else if (reduced==2) {
+    case_when(
+      label == "Influenza e Pneumonia" ~ "Flu/Pneu",
+      label == "Respiratórias Crônicas Inferiores" ~ "Chronic Resp.",
+      label == "Outras doenças respiratórias" ~ "Other Resp.",
+      label == "Doenças hipertensivas" ~ "HTN diseases",
+      label == "IAM" ~ "IHD",
+      label == "Parada Cardíaca" ~ "Heart failure",
+      label == "AVC" ~ "CVD",
+      label == "Outras doenças do Aparelho Circulatório" ~ "Other Circ.",
+      label == "Neoplasias" ~ "Malig. Neo.",
+      label == "Alzheimer e demência" ~ "Alz/Dem",
+      label == "Diabetes" ~ "Diabetes",
+      label == "Falência Renal" ~ "Renal failure",
+      label == "Sepse" ~ "Sepsis",
+      label == "Trato urinário" ~ "Urinary tract",
+      label == "Causas indeterminadas" ~ "Undetermined",
+      label == "Causas selecionadas" ~ "Selected causes",
+      label == "Causas naturais" ~ "Natural causes"
+    ) 
+  }
 }
