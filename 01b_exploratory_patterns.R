@@ -313,3 +313,106 @@ ggsave(
   units = "in",
   dpi = 300
 )
+
+# EPI Poster graphs ----
+
+q025 <- quantile(temp_df$hi_med, probs = 0.025)
+q05 <- quantile(temp_df$hi_med, probs = 0.05)
+q10 <- quantile(temp_df$hi_med, probs = 0.1)
+q90 <- quantile(temp_df$hi_med, probs = 0.9)
+q95 <- quantile(temp_df$hi_med, probs = 0.95)
+q975 <- quantile(temp_df$hi_med, probs = 0.975)
+q99 <- quantile(temp_df$hi_med, probs = 0.99)
+
+temp_df %>% 
+  filter(dia >= '2023-10-01') %>% 
+  ggplot(aes(x=dia)) + 
+  geom_segment(aes(xend=dia, y=fitted_hi, yend=hi_med,
+                   alpha = hi_med >= quantile(temp_df$hi_med, probs = 0.95) | hi_med <= quantile(temp_df$hi_med, probs = 0.05),
+                   color = hi_med
+  )) +
+  geom_point(aes(y=hi_med, color = hi_med,
+                 alpha = hi_med >= quantile(temp_df$hi_med, probs = 0.95) | hi_med <= quantile(temp_df$hi_med, probs = 0.05)
+  )) +
+  geom_line(aes(y=fitted_hi, linewidth = "IC (tendência)")) + 
+  geom_hline(yintercept = q025, linetype = "dashed", color = "purple") +
+  annotate("text", x=ymd('2024-07-15'), y=q025+0.4, label = "Q02.5", color = "purple", size = 2.8) +
+  geom_hline(yintercept = q05, linetype = "dashed", color = "blue") +
+  annotate("text", x=ymd('2024-07-15'), y=q05+0.4, label = "Q05", color = "blue", size = 2.8) +
+  geom_hline(yintercept = q10, linetype = "dashed", color = "lightblue") +
+  annotate("text", x=ymd('2024-07-15'), y=q10+0.4, label = "Q10", color = "lightblue", size = 2.8) +
+  geom_hline(yintercept = q95, linetype = "dashed", color = "yellow3") +
+  annotate("text", x=ymd('2024-07-15'), y=q95+0.5, label = "Q95", color = "yellow3", size = 2.8) +
+  geom_hline(yintercept = q975, linetype = "dashed", color = "orange3") +
+  annotate("text", x=ymd('2024-07-15'), y=q975+0.5, label = "Q97.5", color = "orange3", size = 2.8) +
+  geom_hline(yintercept = q99, linetype = "dashed", color = "red") +
+  annotate("text", x=ymd('2024-07-15'), y=q99+0.5, label = "Q99", color = "red", size = 2.8) +
+  scale_linewidth_manual(values = c(0.8)) +
+  scale_alpha_manual(values = c(0.4, 1)) +
+  guides(alpha="none") +
+  scale_color_gradientn(
+    values = scales::rescale(c(15, 18, 20, 25, 28, 30, 32)),
+    colors = c("#3422f5", "#3ba1eb", "#96d0fa", "#fffa91", "#f5733b", "#ba1a35")
+  ) + 
+  scale_x_date(date_breaks = "1 month", date_labels = "%b\n%Y") +
+  scale_y_continuous(breaks = seq(16, 40, by=4)) +
+  guides(color = guide_colorbar(title.position = "top")) +
+  labs(x="Data", y = "IC médio (°C)", linewidth = "\n\n", color = "IC médio diário (°C)") +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        legend.key.width = unit(1.5, "cm"),
+        legend.key.height = unit(0.2, "cm"),
+        legend.title = element_text(hjust=0.5, size=10),
+        legend.text = element_text(hjust=0.5, size=10),
+        plot.margin = unit(c(0,0.2,0.2,0.2), "cm"),
+        panel.grid.major = element_line(linewidth=0.2),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "black", linewidth = 1),
+        axis.text.y = element_text(size=10),
+        axis.title.y = element_text(size=10),
+        axis.title.x = element_text(size=10)) 
+
+
+g_serie_ic <- temp_df %>% 
+  ggplot(aes(x=dia)) + 
+  geom_segment(aes(xend=dia, y=fitted_hi, yend=hi_med,
+                   alpha = hi_med >= quantile(temp_df$hi_med, probs = 0.95) | hi_med <= quantile(temp_df$hi_med, probs = 0.05),
+                   color = hi_med
+  )) +
+  geom_point(aes(y=hi_med, color = hi_med,
+                 alpha = hi_med >= quantile(temp_df$hi_med, probs = 0.95) | hi_med <= quantile(temp_df$hi_med, probs = 0.05)
+  )) +
+  geom_line(aes(y=fitted_hi, linewidth = "IC (tendência)"), color = "black") + 
+  scale_linewidth_manual(values = c(1.2)) +
+  scale_alpha_manual(values = c(0.4, 1)) +
+  guides(alpha="none") +
+  scale_color_gradientn(
+    values = scales::rescale(c(15, 18, 20, 25, 28, 30, 32)),
+    colors = c("#3422f5", "#3ba1eb", "#96d0fa", "#fffa91", "#f5733b", "#ba1a35")
+  ) + 
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+  scale_y_continuous(breaks = seq(16, 40, by=4)) +
+  guides(color = guide_colorbar(title.position = "top")) +
+  labs(x="Data", y = "IC médio (°C)", linewidth = "\n\n", color = "IC médio diário (°C)") +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        legend.key.width = unit(1.5, "cm"),
+        legend.key.height = unit(0.2, "cm"),
+        legend.title = element_text(hjust=0.5, size=10, color = "white"),
+        legend.text = element_text(hjust=0.5, size=10, color = "white"),
+        plot.margin = unit(c(0,0.2,0.2,0.2), "cm"),
+        panel.grid.major = element_line(linewidth=0.2, color = "white"),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y = element_line(color = "white", linewidth = 1),
+        axis.text.y = element_text(size=10, color = "white"),
+        axis.text.x = element_text(size=10, color = "white"),
+        axis.title.y = element_text(size=10, color = "white"),
+        axis.title.x = element_text(size=10, color = "white"))
+
+ggsave(
+  g_serie_ic,
+  filename = "serie_ic.png",
+  bg = "transparent",
+  width = 3200,
+  units = "px"
+)
