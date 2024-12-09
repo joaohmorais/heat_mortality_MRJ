@@ -2,7 +2,7 @@ library(tidyverse)
 library(mgcv)
 library(patchwork)
 
-Sys.setlocale("LC_ALL", "English")
+Sys.setlocale("LC_TIME", "English")
 
 # 0. Setup and data ----
 
@@ -53,6 +53,102 @@ temp_df <- temp_df %>%
          diff_hi = hi_med - fitted_hi) 
 
 # 2. Visualization ----
+
+## Null model structure ----
+
+gam_null_terms <- gam_null_selec %>% 
+  predict(
+    newdata = gam_null_selec$model,
+    se.fit = TRUE, 
+    type = "terms"
+  )
+
+terms_df <- tibble(
+  gam_null_selec$model %>% select(time_id:covid_id),
+  constant = attr(gam_null_terms, "constant"),
+  fit_trend = gam_null_terms$fit[,1],
+  se_trend = gam_null_terms$se.fit[,1],
+  fit_dia_ano = gam_null_terms$fit[,2],
+  se_dia_ano = gam_null_terms$se.fit[,2],
+  fit_covid = gam_null_terms$fit[,3],
+  se_covid = gam_null_terms$se.fit[,3]
+)
+
+trend_df <- terms_df %>% 
+  select(time_id, fit_trend, se_trend) %>% 
+  left_join(do_selec %>% select(data_obito, time_id)) %>% 
+  mutate(low_trend = fit_trend - 1.96*se_trend,
+         upp_trend = fit_trend + 1.96*se_trend) %>% 
+  relocate(data_obito, .before = everything())
+
+g_trend <- 
+  trend_df %>% 
+  ggplot(aes(x=data_obito)) + 
+  geom_ribbon(aes(ymin=low_trend, ymax = upp_trend), fill = "blue", alpha=0.2) + 
+  geom_line(aes(y=fit_trend)) +
+  scale_x_date(date_breaks = "1 year",
+               date_labels = "%Y", expand=c(0,0)) +
+  labs(x="t - Date of death", y = "f1(t)", title = "(a) f1: long-term trend") +
+  theme_minimal() +
+  theme(panel.grid.minor.x = element_blank())
+
+dia_ano_df <- terms_df %>% 
+  select(dia_ano, fit_dia_ano, se_dia_ano) %>% 
+  distinct() %>% 
+  mutate(low_dia_ano = fit_dia_ano - 1.96*se_dia_ano,
+         upp_dia_ano = fit_dia_ano + 1.96*se_dia_ano)
+
+g_dia_ano <- 
+  dia_ano_df %>% 
+  ggplot(aes(x=dia_ano)) + 
+  geom_ribbon(aes(ymin=low_dia_ano, ymax = upp_dia_ano), fill = "blue", alpha=0.2) + 
+  geom_line(aes(y=fit_dia_ano)) +
+  scale_x_continuous(breaks = c(1, seq(50, 300, by=50), 366),
+                     labels = function(x) {
+                       x_dt <- ymd('2012-01-01') + days(x-1)
+                       
+                       
+                       case_when(
+                         x == 1 | x == 366 ~ paste0(x, "\n(",
+                                                    format(x_dt, "%d-%b"), ")"),
+                         TRUE ~ as.character(x)
+                       )
+                     }
+                     ) +
+  labs(x="doy - day of year", y = "f2(doy)", title = "(b) f2: day-of-year effect\n") +
+  theme_minimal() +
+  theme(panel.grid.minor.x = element_blank())
+
+covid_df <-  terms_df %>% 
+  select(covid_id, fit_covid, se_covid) %>% 
+  distinct() %>% 
+  filter(covid_id > 0) %>% 
+  left_join(do_selec %>% select(covid_id, data_obito)) %>% 
+  mutate(low_covid = fit_covid - 1.96*se_covid,
+         upp_covid = fit_covid + 1.96*se_covid) %>% 
+  relocate(data_obito, .before = everything())
+
+g_covid <- 
+  covid_df %>% 
+  ggplot(aes(x=data_obito)) + 
+  geom_ribbon(aes(ymin=low_covid, ymax = upp_covid), fill = "blue", alpha=0.2) + 
+  geom_line(aes(y=fit_covid)) +
+  scale_x_date(date_breaks = "6 months", date_labels = "%b\n%Y", expand=c(0,0)) +
+  labs(x="Date of death", y = "f3(covid)", title = "(c) f3: differential death pattern \nduring Covid-19 pandemic") +
+  theme_minimal() +
+  theme(panel.grid.minor.x = element_blank())
+
+g_terms <- g_trend / (g_dia_ano | g_covid)
+
+ggsave(
+  g_terms,
+  filename = "img/imgs01_model_terms.jpeg",
+  width = 7.5,
+  units = "in",
+  dpi = 300
+)
+
+## Trends ----
 
 g_do <- 
   do_selec %>%  
