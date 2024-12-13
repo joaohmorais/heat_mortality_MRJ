@@ -2,8 +2,6 @@ library(tidyverse)
 library(mgcv)
 library(patchwork)
 
-Sys.setlocale("LC_TIME", "English")
-
 # 0. Setup and data ----
 
 source("00_aux_functions.R")
@@ -317,7 +315,8 @@ g_auc_nov <-
                labels = function(x) {
                  format(x, "%b %d") %>% str_to_title()
                }, position = "top") +
-  labs(x="Data", fill = "(a), Accumulated Heat Area (°C * h)") +
+  labs(x="Data", fill = "HAAT (°C * h)") +
+  ggtitle("A. Heat Index and HAAT values during November 2023 heat wave") +
   scale_fill_viridis_c(option = "C", 
                        values = seq(0, 120/max(nov23_auc$auc36), length.out=6),
                        breaks = seq(0, 120, by=30),
@@ -325,6 +324,7 @@ g_auc_nov <-
   theme(axis.title.y = element_blank(),
         axis.line.y = element_blank(),
         axis.text.y = element_blank(),
+        plot.title = element_text(hjust = 0.5, face="bold", size=10),
         legend.position = "top",
         panel.grid = element_blank(),
         legend.key.width = unit(1,"cm"),
@@ -370,7 +370,7 @@ g_ic_nov <-
   annotate("text",
            x=ymd_hm("2023-11-15 00:00"),
            y=50,
-           label = "(b), Hourly heat index (°C)",
+           label = "Hourly heat index (°C)",
            fontface="bold",
            size=3.2) +
   scale_color_manual(values = c("#c70559")) +
@@ -378,7 +378,7 @@ g_ic_nov <-
         panel.grid = element_blank(),
         plot.margin = unit(c(0, 0.2, 0, 0.2), "cm"),
         axis.line.y = element_line(linewidth = 0.6, color = "black"),
-        axis.title.y = element_text(size=6, face="bold"),
+        axis.title.y = element_text(size=8, face="bold"),
         axis.title.x = element_blank(),
         axis.text.x = element_text(vjust=12, size=6),
         axis.text.y = element_text(size=6),
@@ -409,6 +409,110 @@ ggsave(
   units = "in",
   dpi = 300
 )
+
+# Comparison of two days with similar HImed -----
+
+hourly_df <- read_csv("data/hourly_temp.csv", show_col_types = F) %>% 
+  mutate(dt_registro = with_tz(dt_registro, "America/Sao_Paulo"))
+
+comparison_dates <- c(
+  ymd("2023-10-07"), 
+  ymd("2020-01-12")
+)
+
+hourly_df <- hourly_df %>% 
+  filter(dia %in% comparison_dates)
+
+hourly_df_summ <- 
+  temp_df %>% 
+  filter(dia %in% comparison_dates) %>% 
+  select(dia, hi_med, auc36)
+
+hourly_df <- hourly_df %>% 
+  left_join(hourly_df_summ) %>% 
+  mutate(label = paste0(
+    format(dia, "%B %d, %Y"), "\nAverage HI: ",
+    round(hi_med, 2), "°C\nHAAT: ",
+    format(auc36, digits=2), "°C*h"
+  ))
+
+g_comparison <- 
+  hourly_df %>% 
+  ggplot(aes(x=dt_registro, y=heat_index)) + 
+  geom_ribbon(
+    data = hourly_df %>%
+      nest(.by=label) %>%
+      mutate(interp = map(
+        data, function(x) {
+          x_levels <-seq(min(x$dt_registro), max(x$dt_registro), length.out = 100)
+          
+          approx(x$dt_registro, x$heat_index, n=100) %>%
+            as_tibble() %>%
+            mutate(dt_registro = x_levels)
+        }
+      )) %>%
+      select(-data) %>%
+      unnest(interp) %>%
+      mutate(y_min = 36, y_max = ifelse(y >= 36, y, 36)),
+    aes(x=dt_registro, ymin = y_min, ymax=y_max),
+    fill = "orange",
+    inherit.aes = F
+  ) +
+  geom_line() + 
+  geom_hline(yintercept = 36, linetype = "dashed") +
+  scale_x_datetime(
+    expand=c(0,0),
+    date_breaks = "6 hours",
+    labels = function(x) {
+      
+      case_when(
+        hour(x) == 0 ~ "\n",
+        TRUE ~ format(x, "\n%Hh")
+      )
+    },
+    name = "Hour"
+  ) +
+  ggtitle("B. Comparing average HI (°C) vs HAAT values (°C*h)") +
+scale_y_continuous(breaks = seq(24, 46, by=2), name = "Heat Index (°C)") +
+  facet_wrap(~label, scales = "free_x") + 
+  theme_minimal() +
+  theme(plot.margin = unit(c(0, 0.2, 0, 0.2), "cm"),
+        panel.grid.minor = element_blank(),
+        #axis.line.y = element_line(linewidth = 0.6, color = "black"),
+        axis.title.y = element_text(size=8, face="bold"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size=8),
+        axis.text.y = element_text(size=6),
+        #legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5, face="bold", size=10)
+        #legend.title = element_blank(),
+        #legend.margin = margin(t = 0, b=0, unit='cm'),
+        #legend.box.margin = margin(t = 0, b=0, unit='cm')
+        )
+
+
+g_nov_all2 <- 
+  g_auc_nov / g_ic_nov / g_comparison + 
+  plot_layout(heights = c(1,4,4)) 
+
+ggsave(
+  g_nov_all2,
+  filename = "img/img04_nov_heat_wave_compare.tiff",
+  width = 7.5,
+  height = 8.4,
+  units = "in",
+  dpi = 300
+)
+
+ggsave(
+  g_nov_all2,
+  filename = "img/img04_nov_heat_wave_compare.jpg",
+  width = 7.5,
+  height = 8.4,
+  units = "in",
+  dpi = 300
+)
+
 
 # EPI Poster graphs ----
 
@@ -512,3 +616,5 @@ ggsave(
   width = 3200,
   units = "px"
 )
+
+
