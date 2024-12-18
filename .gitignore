@@ -8,3 +8,5 @@
 .quarto
 img
 summary_deaths.csv
+results/*
+*.html

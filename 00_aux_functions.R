@@ -1,5 +1,9 @@
 require(tidyverse)
 
+# CDC GROUPS ----
+
+## ICD specification ----
+
 get_cdc_groups <- function() {
   cdc_groups <- tribble(
     ~grupo, ~cids,
@@ -38,6 +42,8 @@ get_cdc_groups <- function() {
   
   cdc_groups
 }
+
+## Translation ----
 
 translate_cdc_groups <- function(label, reduced=0) {
   
@@ -102,4 +108,128 @@ translate_cdc_groups <- function(label, reduced=0) {
       label == "Causas naturais" ~ "Natural causes"
     ) 
   }
+}
+
+# HEAT INDEX CALCULATION ----
+
+heat_index_standard_formula <- function(temperature_fahrenheit, humidity) {
+  c1 <- -42.379
+  c2 <- 2.04901523
+  c3 <- 10.14333127
+  c4 <- -0.22475541
+  c5 <- -6.83783e-03
+  c6 <- -5.481717e-02
+  c7 <- 1.22874e-03
+  c8 <- 8.5282e-04
+  c9 <- -1.99e-06
+  
+  c1 + c2 * temperature_fahrenheit + c3 * humidity + c4 * temperature_fahrenheit * humidity +
+    c5 * temperature_fahrenheit^2 + c6 * humidity^2 + c7 * temperature_fahrenheit^2 * humidity +
+    c8 * temperature_fahrenheit * humidity^2 + c9 * temperature_fahrenheit^2 * humidity^2
+}
+
+calculate_heat_index_celsius <- function(temperature_celsius, humidity) {
+  
+  
+  temperature_fahrenheit <- temperature_celsius * 9/5 + 32
+  
+  # Simpler formula
+  
+  HI <- 0.5 * (temperature_fahrenheit + 61 + ((temperature_fahrenheit-68)*1.2) + (humidity*0.094))
+  
+  HI <- case_when(
+    HI < 80 ~ HI,
+    HI >= 80 & humidity < 13 & temperature_fahrenheit >= 80 & temperature_fahrenheit <= 112 ~
+      # Standard formula with first adjustment
+      heat_index_standard_formula(temperature_fahrenheit, humidity) - ((13-humidity)/4)*sqrt((17-abs(temperature_fahrenheit-95))/17),
+    HI >= 80 & humidity > 85 & temperature_fahrenheit >= 80 & temperature_fahrenheit <= 87 ~
+      # Standard formula with second adjustment
+      heat_index_standard_formula(temperature_fahrenheit, humidity) + ((humidity-85)/10)*((87-temperature_fahrenheit)/5),
+    # Standard formula (Regression of Rothfusz)
+    HI >= 80 ~ heat_index_standard_formula(temperature_fahrenheit, humidity)) %>% 
+    suppressWarnings()
+  
+  # convert back to celsius
+  HI_celsius <- (HI - 32) / 1.8
+  
+  return(HI_celsius)
+}
+
+# MODEL RESULTS EXTRACTION ----
+
+get_null_fit <- function(df, model, cdc_cause, age_group) {
+  df %>% 
+    mutate(fitted = exp(predict(model, newdata=df))) %>% 
+    select(data_obito, n, fitted) %>% 
+    mutate(causa = cdc_cause, grupo = age_group)
+}
+
+extract_RR_lag <- function(gam_pred, range, label="at") {
+  RR_lag <- gam_pred$matRRfit %>% 
+    as.data.frame() %>% 
+    as_tibble() %>% 
+    mutate(at = range) %>% 
+    pivot_longer(cols = starts_with("lag"), names_to = "lag", values_to = "RR", names_prefix = 'lag') %>% 
+    mutate(lag = as.integer(lag)) %>% 
+    left_join(
+      gam_pred$matRRlow %>% 
+        as.data.frame() %>% 
+        as_tibble() %>% 
+        mutate(at = range) %>% 
+        pivot_longer(cols = starts_with("lag"), names_to = "lag", values_to = "RR_low", names_prefix = 'lag') %>% 
+        mutate(lag = as.integer(lag))
+    ) %>% 
+    left_join(
+      gam_pred$matRRhigh %>% 
+        as.data.frame() %>% 
+        as_tibble() %>% 
+        mutate(at = range) %>% 
+        pivot_longer(cols = starts_with("lag"), names_to = "lag", values_to = "RR_upp", names_prefix = 'lag') %>% 
+        mutate(lag = as.integer(lag))
+    ) 
+  
+  colnames(RR_lag)[colnames(RR_lag) == "at"] <- label
+  RR_lag
+}
+
+extract_RR <- function(gam_pred, range, label="at") {
+  RR <- gam_pred$allRRfit %>% 
+    as.data.frame() %>% 
+    as_tibble() %>% 
+    rename(RR=1) %>% 
+    mutate(at = range) %>% 
+    left_join(
+      gam_pred$allRRlow %>% 
+        as.data.frame() %>% 
+        as_tibble() %>% 
+        rename(RR_low=1) %>% 
+        mutate(at = range)
+    ) %>% 
+    left_join(
+      gam_pred$allRRhigh %>% 
+        as.data.frame() %>% 
+        as_tibble() %>% 
+        rename(RR_upp=1) %>% 
+        mutate(at = range)
+    )
+  
+  colnames(RR)[colnames(RR) == "at"] <- label
+  RR
+}
+
+extract_fit_metrics <- function(model, model_tag, cdc_cause, age_group) {
+  tibble(
+    causa = cdc_cause,
+    grupo = age_group,
+    metric = model_tag,
+    aic = model$aic,
+    ubre = model$gcv.ubre,
+    deviance = model$deviance,
+    null_deviance = model$null.deviance,
+    edf_values = sum(model$edf),
+    df_residual = model$df.residual,
+    deviance_explained = summary(model)$dev.expl,
+    log_likelihood = as.numeric(logLik(model)),
+    converged = model$converged
+  )
 }
