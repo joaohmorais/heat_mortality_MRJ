@@ -18,9 +18,6 @@ estacoes_sf <- estacoes_df %>%
   `st_crs<-`(4674)
 
 
-
-
-
 g_map <- 
   osm_map %>% 
   autoplot.OpenStreetMap() + 
@@ -55,4 +52,4 @@ ggsave(g_map,
        units = "in",
        dpi = 300
        )
-     
+       
