@@ -1,20 +1,15 @@
 library(tidyverse)
 
-load("../analises-calor/dlnm_model_results_hours2_2024_11_04.Rdata")
-hour_metrics_df <- metrics_df
+source("00_aux_functions.R")
 
-load("../analises-calor/dlnm_model_results_2024_11_04.Rdata")
+cdc_groups <- get_cdc_groups()
 
-metrics_df <- metrics_df %>% 
-  filter(!grepl("num_hr_", metric)) %>% 
-  add_row(hour_metrics_df)
+load("results/dlnm_model_results.Rdata")
 
-load("../analises-calor/hw_results_cen0.Rdata")
+load("results/hw_results.Rdata")
 
 metrics_df <- metrics_df %>% 
   add_row(hw_metrics_df)
-
-table(metrics_df$metric)
 
 metrics_df <- metrics_df %>% 
   mutate(metrics_group = case_when(
@@ -58,7 +53,7 @@ g_metrics <-
     labels = c("T only", "HI only",
                "Hours",
                "HW", "HW + T",
-               "ARAC", "ARAC + T", "ARAC + HI") %>% rev()
+               "HAAT", "HAAT + T", "HAAT + HI") %>% rev()
   ),
   causa_eng = translate_cdc_groups(causa, reduced=2),
   causa_eng = fct_reorder(causa_eng, group_id)

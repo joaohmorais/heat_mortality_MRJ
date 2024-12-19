@@ -290,7 +290,7 @@ ggsave(
 
 ggsave(
   g_legend,
-  filename = 'img03_legend.tiff',
+  filename = 'img/img03_legend.tiff',
   dpi=300
 )
 
