@@ -136,7 +136,7 @@ for (metric_i in unique(parameters$metric)) {
       do$var,
       lag = 10,
       argvar = list(fun=fun_i, df = df_i),
-      arglag = list(fun="ns", df = 4)
+      arglag = list(fun="ns", df = 3)
     )
     
     if (grepl("auc", metric_i)) {
@@ -145,7 +145,7 @@ for (metric_i in unique(parameters$metric)) {
         do$t_med,
         lag=10,
         argvar = list(fun="bs", df=4),
-        arglag = list(fun="ns", df=4)
+        arglag = list(fun="ns", df=3)
       )
       
       formula <- n ~ cb_t + cb_i + s(time_id, k=12, bs = "tp") + s(dia_ano, k=6, bs="cc") + s(covid_id, k=8, bs="cc")

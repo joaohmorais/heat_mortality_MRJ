@@ -345,15 +345,15 @@ g_num_hr <- RR_selec_hr %>%
   geom_hline(yintercept = 2, linetype = "dashed", color = "black", linewidth=0.2) +
   geom_hline(yintercept = 1) +
   geom_point(
-    data = crossing_points %>% mutate(causa = translate_cdc_groups(causa)),
+    data = crossing_points_hr %>% mutate(causa = translate_cdc_groups(causa)),
     aes(x=at, y=threshold, color = faixa), size=1
   ) +
   geom_text(
-    data = crossing_points %>% mutate(causa = translate_cdc_groups(causa)),
+    data = crossing_points_hr %>% mutate(causa = translate_cdc_groups(causa)),
     aes(x=at, y=threshold, label = paste0(round(at, 1)), color = faixa),
-    nudge_y = ifelse(crossing_points$faixa == 36, -0.15, 0.1),
-    nudge_x = ifelse(crossing_points$faixa == 44, -0.6, 
-                     ifelse(crossing_points$faixa == 40, -0.3, 0)),
+    nudge_y = ifelse(crossing_points_hr$faixa == 36, -0.15, 0.1),
+    nudge_x = ifelse(crossing_points_hr$faixa == 44, -0.6, 
+                     ifelse(crossing_points_hr$faixa == 40, -0.3, 0)),
     size=2.4
   ) +
   scale_y_continuous(breaks = c(0.5, 1, 1.25, 1.5, 2, 2.5)) +
@@ -805,3 +805,122 @@ crossing_points %>%
     names_from = c(grupo, thresh)
   ) %>% 
   write_csv("results/crossing_points_hot_mean.csv")
+
+# LAG EFFECTS -----
+
+critical_points <- crossing_points %>%
+  left_join(cdc_groups %>% select(group_id, grupo), by=c("causa"="grupo")) %>% 
+  mutate(causa = translate_cdc_groups(causa)) %>% 
+  filter(scenario == "hot", thresh == 1.25) %>% 
+  summarise(q=mean(q), .by=c(grupo, metric, thresh)) %>% 
+  mutate(cp = case_when(
+    metric == "t_med" ~ quantile(temp_df$t_med, probs = q),
+    metric == "hi_med" ~ quantile(temp_df$hi_med, probs = q)
+  ))
+
+RR_lag_df_crit <- RR_lag_df %>% 
+  left_join(critical_points %>% select(grupo, metric, cp), by=c("grupo", "metric")) %>% 
+  filter(at > cp) %>% 
+  summarise(RR=median(RR), RR_low=median(RR_low), RR_upp=median(RR_upp), .by=c(causa, grupo, metric, lag))
+
+plot_lag_effects <- function(df, variable, age_group, cut_off) {
+  
+  if (variable == "hi_med") {
+    title <- paste0("Lag effect for HImed >= ", round(cut_off, 2), "°C")
+  } else if (variable == "t_med") {
+    title <- paste0("Lag effect for Tmed >= ", round(cut_off, 2), "°C")
+  }
+  
+  if (age_group == "Idoso") {
+    subtitle <- "Elderly (>= 65 y.)"
+  } else {
+    subtitle <- "Young (< 65 y.)"
+  }
+  
+  
+  df %>% 
+    filter(metric == variable, grupo == age_group) %>% 
+    left_join(cdc_groups %>% select(grupo, group_id), by=c(causa = "grupo")) %>% 
+    mutate(sign = case_when(
+      RR_low > 1 ~ "Risk",
+      RR_upp < 1 ~ "Protective effect   ",
+      TRUE ~ "Non significant  "
+    ) %>% factor(levels = c("Non significant  ", "Protective effect   ", "Risk"),),
+    causa = translate_cdc_groups(causa, reduced=T),
+    causa = reorder(causa, group_id),
+    RR_upp = case_when(RR_upp > 10 ~ 10, TRUE ~ RR_upp) # truncating RR limit
+    ) %>% 
+    ggplot(aes(x=lag)) + 
+    geom_ribbon(aes(ymin=RR_low, ymax=RR_upp), alpha = 0.2) + 
+    geom_line(aes(y=RR, color = sign, group = causa), linewidth=0.3) + 
+    scale_color_manual(values = c("black", "blue", "red"), drop=F) +
+    geom_hline(yintercept = 1, linetype="dashed", linewidth=0.2) +
+    scale_x_continuous(breaks = seq(0, 10, by=2)) +
+    labs(x="Lag (days)", y = "Relative Risk (RR)", color = "", title = title, subtitle = subtitle) +
+    facet_wrap(~causa, scales = "free", ncol=3) + 
+    guides(color = guide_legend(override.aes = list(linewidth = 2))) +
+    theme_minimal() + 
+    theme(legend.position = "top", plot.title = element_text(hjust=0.5, size=10), 
+          plot.subtitle = element_text(hjust=0.5, face = "bold", size=8),
+          legend.title = element_blank(),
+          legend.text = element_text(size=6),
+          axis.text.x = element_text(size=6),
+          axis.text.y = element_text(size=5),
+          axis.title = element_text(size=8),
+          strip.text = element_text(size=6),
+          panel.grid.minor = element_blank(),
+          panel.grid.major = element_line(linewidth=0.2),
+          plot.margin = margin(t = 0, 
+                               r = 1, 
+                               b = 0, 
+                               l = 1),
+          panel.margin.y = unit(0, "lines"),
+          panel.margin.x = unit(0, "lines"),
+          legend.key.width = unit(0.5, "cm")) 
+} 
+
+g_hi_lag_jovem <- RR_lag_df_crit %>% 
+  plot_lag_effects(variable = "hi_med", age_group = "Jovem",cut_off = critical_points$cp[3])
+g_hi_lag_idoso <- RR_lag_df_crit %>% 
+  plot_lag_effects(variable = "hi_med", age_group = "Idoso",cut_off = critical_points$cp[1])
+
+g_legend <- get_legend(g_hi_lag_jovem) %>% as_ggplot()
+
+g_hi_lag_jovem <- g_hi_lag_jovem + guides(color="none")
+g_hi_lag_idoso <- g_hi_lag_idoso + guides(color="none")
+
+g_hi_lag_both <- 
+  (g_hi_lag_jovem | g_hi_lag_idoso) / g_legend + plot_layout(heights = c(16,1)) 
+
+g_hi_lag_both
+
+ggsave(
+  g_hi_lag_both,
+  filename = "img/img_extra_hi_med_lag_effect.jpeg",
+  width = 7.5,
+  units = "in",
+  dpi=300
+)
+
+g_t_lag_jovem <- RR_lag_df_crit %>% 
+  plot_lag_effects(variable = "t_med", age_group = "Jovem",cut_off = critical_points$cp[4])
+g_t_lag_idoso <- RR_lag_df_crit %>% 
+  plot_lag_effects(variable = "t_med", age_group = "Idoso",cut_off = critical_points$cp[2])
+
+g_legend <- get_legend(g_t_lag_idoso) %>% as_ggplot()
+
+g_t_lag_jovem <- g_t_lag_jovem + guides(color="none")
+g_t_lag_idoso <- g_t_lag_idoso + guides(color="none")
+
+g_t_lag_both <- 
+  (g_t_lag_jovem | g_t_lag_idoso) / g_legend + plot_layout(heights = c(16,1)) 
+
+g_t_lag_both
+
+ggsave(
+  g_t_lag_both,
+  filename = "img/img_extra_t_med_lag_effect.jpeg",
+  width = 7.5,
+  units = "in",
+  dpi=300
+)

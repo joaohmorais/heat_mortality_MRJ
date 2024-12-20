@@ -134,7 +134,8 @@ for (i in seq_len(nrow(model_combinations))) {
     argvar = list(
       fun = model_combinations$fun[i],
       df = model_combinations$df[i]
-    )
+    ),
+    arglag = list(fun="ns", df = 3)
   )
   
   if (model_combinations$fun[i] != "ps") {
@@ -212,7 +213,8 @@ for (i in seq_len(nrow(model_combinations))) {
       argvar = list(
         fun = "ns",
         df = 4
-      )
+      ),
+      arglag = list(fun="ns", df = 3)
     )
     
     gam_i_t <- gam(
@@ -229,7 +231,8 @@ for (i in seq_len(nrow(model_combinations))) {
       argvar = list(
         fun = "bs",
         df = 3
-      )
+      ),
+      arglag = list(fun="ns", df = 3)
     )
     
     gam_i_hi <- gam(
